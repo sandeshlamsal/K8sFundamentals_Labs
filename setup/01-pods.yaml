@@ -1,0 +1,110 @@
+# Four test pods for sections 1 to 3.
+# Used by:  kubectl apply -f setup/01-pods.yaml
+
+# ---------------------------------------------------------------------------
+# Pod "web": two containers in ONE pod, to show they share localhost (section 1).
+# ---------------------------------------------------------------------------
+
+# apiVersion: which API group and version defines this object. Pods belong to the
+# original "core" group, which is written as plain v1.
+apiVersion: v1
+
+# kind: the type of object. A bare Pod (no Deployment around it) is not recreated
+# if it dies. That is fine here and keeps its IP stable while you study it.
+kind: Pod
+
+metadata:
+  # name: how you address the pod in kubectl, e.g. "kubectl exec web ...".
+  name: web
+
+  # labels: free-form key/value tags. On their own they do nothing; the Service
+  # "web" in 04-ingress.yaml finds this pod by looking for app=web.
+  labels:
+    app: web
+
+spec:
+  # nodeSelector: only schedule this pod on a node carrying this label.
+  # kubernetes.io/hostname is a label every node gets automatically.
+  # We pin the pod so the lab matches the diagrams: web lives on worker1.
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker
+
+  # containers: every container listed here shares the pod's single network
+  # namespace: one IP address, one eth0, one localhost.
+  containers:
+
+    # name: needed to pick a container, e.g. "kubectl exec web -c nginx".
+  - name: nginx
+
+    # image: nginx is a ready-made web server on port 80. The tag is pinned so the
+    # lab behaves the same every time; "alpine" is the small variant.
+    image: nginx:1.27-alpine
+
+    # ports/containerPort: documentation only. It does NOT open or publish anything;
+    # nginx listens on 80 whether this line exists or not.
+    ports:
+    - containerPort: 80
+
+    # Second container in the same pod. It will curl localhost:80 and reach nginx,
+    # proving both containers share one network namespace.
+  - name: log-sidecar
+
+    # image: netshoot is a troubleshooting image with curl, ping, ip, nslookup, dig
+    # and tcpdump preinstalled. The nginx image has none of these.
+    image: nicolaka/netshoot:v0.13
+
+    # command: replaces the image's default command (an interactive shell, which
+    # exits at once with no terminal attached). "sleep infinity" keeps the container
+    # alive doing nothing, so you can "kubectl exec" into it whenever you like.
+    command: ["sleep", "infinity"]
+
+# "---" separates one Kubernetes object from the next inside a single file.
+---
+# ---------------------------------------------------------------------------
+# Pod "pod-a": the client in every diagram. Lives on worker1.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-a
+spec:
+  # Pinned to worker1 (kind-worker), the same node as pod-c.
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker
+  containers:
+  - name: netshoot
+    # Network tools, kept alive with sleep; see the notes on pod "web" above.
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "infinity"]
+---
+# ---------------------------------------------------------------------------
+# Pod "pod-c": the SAME-node target. pod-a -> pod-c never leaves worker1.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-c
+spec:
+  # Same node as pod-a on purpose.
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "infinity"]
+---
+# ---------------------------------------------------------------------------
+# Pod "pod-b": the CROSS-node target. pod-a -> pod-b must travel worker1 -> worker2.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-b
+spec:
+  # The other worker on purpose, so the packet has to use the route the CNI installed.
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker2
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "infinity"]

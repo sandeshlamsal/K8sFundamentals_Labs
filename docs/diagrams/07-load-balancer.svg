@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 904 274" width="904" height="274" role="img" aria-label="The client asks by ARP who owns the load balancer IP; the MetalLB speaker on worker1 answers, the client sends the packet to worker1, and iptables rewrites it to a pod.">
+<style>
+  :root{--panel:#ffffff;--fg:#152033;--muted:#5b6b82;--line:#b9c4d4;--node:#e6ecf5;--pod:#dbe7ff;--pod-line:#6f93e0;--accent:#2a56c6;--pkt:#c2570c;--pkt-fill:#fdebd8}
+  @media (prefers-color-scheme: dark){:root{--panel:#161e29;--fg:#e3e9f2;--muted:#93a1b5;--line:#3a4759;--node:#1a2431;--pod:#1c2f57;--pod-line:#5c82d6;--accent:#86a9ff;--pkt:#f0a253;--pkt-fill:#3a2714}}
+  text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;fill:var(--fg)}
+  .b{font-weight:600} text.dim{fill:var(--muted)} text.p{fill:var(--pkt);font-weight:600} text.a{fill:var(--accent);font-weight:600}
+  .bg{fill:var(--panel)} .node{fill:var(--node);stroke:var(--line)} .pod{fill:var(--pod);stroke:var(--pod-line)}
+  .box{fill:var(--panel);stroke:var(--line)} .hot{fill:var(--pkt-fill);stroke:var(--pkt);stroke-width:1.5}
+  .ln{fill:none;stroke:var(--muted);stroke-width:1.5} .ln.a{stroke:var(--accent);stroke-width:2}
+  .ln.p{stroke:var(--pkt);stroke-width:2} .ln.dash{stroke-dasharray:5 4}
+  .mk{fill:var(--muted)} .mk.a{fill:var(--accent)} .mk.p{fill:var(--pkt)}
+</style>
+<defs>
+  <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk a" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk p" d="M0 0L10 5L0 10z"/></marker>
+</defs>
+<rect class="bg" x="-12" y="-12" width="904" height="274" rx="6"/>
+      <rect class="box" x="10" y="60" width="140" height="130" rx="4"/>
+      <text class="b" x="80" y="118" text-anchor="middle">client</text><text x="80" y="138" text-anchor="middle">172.18.0.9</text>
+      <rect class="node" x="360" y="20" width="240" height="210" rx="6"/>
+      <text class="b" x="376" y="44">worker1 172.18.0.3</text>
+      <rect class="box" x="380" y="64" width="200" height="44" rx="4"/>
+      <text x="480" y="91" text-anchor="middle">MetalLB speaker</text>
+      <rect class="box" x="380" y="150" width="200" height="44" rx="4"/>
+      <text x="480" y="177" text-anchor="middle">iptables DNAT</text>
+      <line class="ln a" x1="150" y1="86" x2="378" y2="86" marker-end="url(#ma)" marker-start="url(#ma)"/>
+      <text class="a" x="264" y="76" text-anchor="middle">1 ARP who has 172.18.255.200?</text>
+      <text class="dim" x="264" y="106" text-anchor="middle">reply: worker1's MAC</text>
+      <line class="ln p" x1="150" y1="172" x2="378" y2="172" marker-end="url(#mp)"/>
+      <text class="p" x="264" y="162" text-anchor="middle">2 dst 172.18.255.200:80</text>
+      <line class="ln p" x1="580" y1="172" x2="698" y2="172" marker-end="url(#mp)"/>
+      <text class="p" x="640" y="162" text-anchor="middle">3 DNAT</text>
+      <rect class="pod" x="700" y="144" width="170" height="56" rx="4"/>
+      <text class="b" x="785" y="168" text-anchor="middle">api</text><text x="785" y="186" text-anchor="middle">10.244.2.7:8080</text>
+    </svg>

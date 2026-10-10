@@ -1,0 +1,965 @@
+<title>Kubernetes Packet Paths</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Layout: one reading column; each concept = short text, one wide diagram, hop list, commands. */
+:root{
+  --bg:#f3f6fa; --panel:#ffffff; --fg:#152033; --muted:#5b6b82; --line:#b9c4d4;
+  --node:#e6ecf5; --pod:#dbe7ff; --pod-line:#6f93e0;
+  --accent:#2a56c6; --pkt:#c2570c; --pkt-fill:#fdebd8; --code:#e9eef6;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e141c; --panel:#161e29; --fg:#e3e9f2; --muted:#93a1b5; --line:#3a4759;
+  --node:#1a2431; --pod:#1c2f57; --pod-line:#5c82d6;
+  --accent:#86a9ff; --pkt:#f0a253; --pkt-fill:#3a2714; --code:#1a2330; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0e141c; --panel:#161e29; --fg:#e3e9f2; --muted:#93a1b5; --line:#3a4759;
+  --node:#1a2431; --pod:#1c2f57; --pod-line:#5c82d6;
+  --accent:#86a9ff; --pkt:#f0a253; --pkt-fill:#3a2714; --code:#1a2330; color-scheme:dark }
+
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:16px;line-height:1.6}
+.wrap{max-width:920px;margin:0 auto;padding-inline:20px;padding-block:40px 72px;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+h1{font-family:var(--cond);font-size:clamp(30px,5vw,44px);line-height:1.1;margin:0;text-wrap:balance}
+h2{font-family:var(--cond);font-size:24px;line-height:1.2;margin:0;text-wrap:balance}
+h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:600}
+p{margin:0;max-width:66ch}
+.lede{font-size:18px;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;padding:0;margin:0;list-style:none}
+.rules li{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:15px}
+.rules b{display:block;font-family:var(--mono);font-size:13px;color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.sw{width:26px;height:0;border-top:2px solid var(--pkt)}
+.sw.a{border-color:var(--accent)} .sw.d{border-top:2px dashed var(--muted)}
+.sq{width:14px;height:14px;border-radius:3px;background:var(--pod);border:1px solid var(--pod-line)}
+.sq.n{background:var(--node);border-color:var(--line)}
+figure{margin:0;display:flex;flex-direction:column;gap:8px;min-width:0}
+.scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px}
+.scroll svg{display:block;width:100%;min-width:720px;height:auto}
+figcaption{font-size:14px;color:var(--muted);max-width:70ch}
+ol{margin:0;padding-left:22px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+code,pre{font-family:var(--mono);font-size:13px}
+code{background:var(--code);padding:1px 5px;border-radius:3px}
+pre{background:var(--code);border-radius:6px;padding:12px 14px;margin:0;overflow-x:auto;line-height:1.55}
+pre .c{color:var(--muted)}
+.lbl{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-top:6px}
+details{border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+summary{cursor:pointer;padding:9px 14px;font-family:var(--mono);font-size:13px}
+summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+details pre{border-radius:0 0 6px 6px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+.tscroll{overflow-x:auto}
+th,td{text-align:left;padding:8px 12px 8px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td code{white-space:nowrap}
+
+/* diagram vocabulary */
+svg text{font-family:var(--mono);font-size:12px;fill:var(--fg)}
+svg .b{font-weight:600} svg text.dim{fill:var(--muted)} svg text.p{fill:var(--pkt);font-weight:600} svg text.a{fill:var(--accent);font-weight:600}
+svg .node{fill:var(--node);stroke:var(--line)} svg .pod{fill:var(--pod);stroke:var(--pod-line)}
+svg .box{fill:var(--panel);stroke:var(--line)} svg .hot{fill:var(--pkt-fill);stroke:var(--pkt);stroke-width:1.5}
+svg .ln{fill:none;stroke:var(--muted);stroke-width:1.5} svg .ln.a{stroke:var(--accent);stroke-width:2}
+svg .ln.p{stroke:var(--pkt);stroke-width:2} svg .ln.dash{stroke-dasharray:5 4}
+svg .mk{fill:var(--muted)} svg .mk.a{fill:var(--accent)} svg .mk.p{fill:var(--pkt)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk a" d="M0 0L10 5L0 10z"/></marker>
+    <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk p" d="M0 0L10 5L0 10z"/></marker>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header>
+  <h1>Kubernetes Packet Paths</h1>
+  <p class="lede">Eight diagrams that follow one packet through a 3-node kind cluster, from inside a pod out to an Ingress. Each one comes with the hops in order and the commands to watch it happen on your Mac.</p>
+  <ul class="rules">
+    <li><b>Rule 1</b>Every pod gets its own IP address.</li>
+    <li><b>Rule 2</b>Any pod can reach any other pod by that IP, with no NAT in between.</li>
+    <li><b>Rule 3</b>Everything else (Services, NodePort, load balancers, Ingress) is a way to find or reach a pod IP.</li>
+  </ul>
+  <div class="legend">
+    <span><i class="sw"></i>the packet being followed</span>
+    <span><i class="sw a"></i>a second path or the reply</span>
+    <span><i class="sw d"></i>possible but not taken</span>
+    <span><i class="sq n"></i>node</span>
+    <span><i class="sq"></i>pod</span>
+  </div>
+  <p>The addresses are the same in every diagram so you can follow them across pages. Yours will differ; <code>kubectl get pods -o wide</code> and <code>kubectl get nodes -o wide</code> show the real ones.</p>
+</header>
+
+<!-- 0 -->
+<section>
+  <h3>Lab 0 · Setup</h3>
+  <h2>Build the nodes and the pods</h2>
+  <p>Do this once. Each later section then adds one small piece under its own "Set up" heading, in order. The files live in the repo's <code>setup/</code> folder; their contents are shown here too, with a comment above every line saying what it does and why it is set that way.</p>
+
+  <p class="lbl">Step 1 · Install the tools (once per machine)</p>
+  <p>You need five things: Git, Docker, kind, kubectl and Helm. Skip any you already have.</p>
+<pre><span class="c"># macOS (Homebrew)</span>
+brew install --cask docker
+brew install git kind kubectl helm
+
+<span class="c"># Linux (Homebrew on Linux, after installing Docker Engine)</span>
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER      <span class="c"># then log out and back in</span>
+brew install git kind kubectl helm
+
+<span class="c"># Windows: install WSL2 and Docker Desktop, then run everything inside the WSL (Ubuntu) terminal</span>
+winget install Docker.DockerDesktop
+<span class="c"># inside WSL, follow the Linux line above for git, kind, kubectl and helm</span></pre>
+  <p>The commands on this page are written for a bash or zsh shell. On Windows, use the WSL terminal, not PowerShell.</p>
+
+  <p class="lbl">Step 2 · Clone the repo and go into it</p>
+<pre>git clone https://github.com/sandeshlamsal/K8sFundamentals_Labs.git
+cd K8sFundamentals_Labs
+ls setup/                      <span class="c"># should list kind-3node.yaml and 01- to 04- files</span></pre>
+  <p>Stay in this folder. Every later command that mentions <code>setup/…</code> is relative to it, so if you open a new terminal, <code>cd K8sFundamentals_Labs</code> again first.</p>
+
+  <p class="lbl">Step 3 · Start Docker and check the tools</p>
+<pre><span class="c"># start Docker: pick the line for your machine</span>
+open -a Docker                 <span class="c"># macOS: wait for the whale icon to settle</span>
+sudo systemctl start docker    <span class="c"># Linux</span>
+                               <span class="c"># Windows: start Docker Desktop from the Start menu</span>
+
+docker info | head -5          <span class="c"># must not say "Cannot connect"</span>
+kind version && kubectl version --client && helm version --short</pre>
+
+  <p class="lbl">Step 4 · Create three nodes</p>
+  <p>Each kind node is a Docker container that runs a full Kubernetes node inside it. This config makes one control plane and two workers, and forwards <code>localhost:8080</code> on your Mac into the cluster for the Ingress section.</p>
+  <details open>
+    <summary>setup/kind-3node.yaml</summary>
+<pre><span class="c"># kind cluster definition: 1 control-plane node + 2 worker nodes.</span>
+<span class="c"># Used by:  kind create cluster --config setup/kind-3node.yaml</span>
+
+<span class="c"># kind: tells the "kind" tool what this document describes. "Cluster" is the only</span>
+<span class="c"># top-level type a kind config file can hold.</span>
+kind: Cluster
+
+<span class="c"># apiVersion: the version of kind's config format. v1alpha4 is the current one;</span>
+<span class="c"># kind refuses the file if this line is missing or wrong.</span>
+apiVersion: kind.x-k8s.io/v1alpha4
+
+<span class="c"># networking: cluster-wide network settings. Anything not listed keeps kind's default.</span>
+<span class="c"># Defaults we rely on but do not set (they explain the addresses in the diagrams):</span>
+<span class="c">#   podSubnet: 10.244.0.0/16      -&gt; every pod IP comes from here, one /24 slice per node</span>
+<span class="c">#   serviceSubnet: 10.96.0.0/16   -&gt; every Service (ClusterIP) comes from here</span>
+<span class="c">#   disableDefaultCNI: false      -&gt; kind installs its own CNI (kindnet), so nodes go Ready</span>
+networking:
+<span class="c">  # kubeProxyMode: how kube-proxy turns a Service into something the node kernel enforces.</span>
+<span class="c">  #   iptables -&gt; one chain of DNAT rules per Service and per pod behind it</span>
+<span class="c">  #   nftables -&gt; the same idea in the newer nftables engine, inspected with "nft"</span>
+<span class="c">  #   ipvs     -&gt; the kernel's IPVS load balancer; being phased out upstream</span>
+<span class="c">  #   none     -&gt; no kube-proxy at all (for a CNI such as Cilium that replaces it)</span>
+<span class="c">  # Why iptables here, written out even though it is kind's default:</span>
+<span class="c">  #   1. Section 4 reads the Service rules with "iptables-save". In any other mode</span>
+<span class="c">  #      that command shows nothing for Services and the lab step fails.</span>
+<span class="c">  #   2. Its chains read like the diagram: KUBE-SERVICES (match the Service IP)</span>
+<span class="c">  #      -&gt; KUBE-SVC-... (pick one pod) -&gt; KUBE-SEP-... (rewrite the destination).</span>
+<span class="c">  #   3. Stating it keeps the lab working if a later kind release changes the default.</span>
+  kubeProxyMode: iptables
+
+<span class="c"># nodes: one list entry per node. Each entry becomes one Docker container, named</span>
+<span class="c"># &lt;cluster&gt;-&lt;role&gt;: kind-control-plane, kind-worker, kind-worker2.</span>
+nodes:
+
+<span class="c"># role: control-plane -&gt; this node runs the cluster's brain: API server, etcd,</span>
+<span class="c"># scheduler, controller-manager. A cluster needs at least one. It carries a</span>
+<span class="c"># NoSchedule taint, so the lab pods land on the workers, not here.</span>
+- role: control-plane
+
+<span class="c">  # extraPortMappings: publish a port of this node container on the Mac, exactly like</span>
+<span class="c">  # "docker run -p". Needed because Docker Desktop runs inside a VM: the Mac cannot</span>
+<span class="c">  # reach the nodes' 172.18.x.x addresses, only ports published this way.</span>
+<span class="c">  # It can only be set when the cluster is created, which is why it is here already.</span>
+  extraPortMappings:
+
+<span class="c">    # containerPort: the port inside the node container to expose. 30081 is the</span>
+<span class="c">    # NodePort we give the ingress controller in section 8. A NodePort is open on</span>
+<span class="c">    # every node, so publishing it from this one node is enough.</span>
+  - containerPort: 30081
+
+<span class="c">    # hostPort: the port on the Mac. http://localhost:8080 therefore reaches</span>
+<span class="c">    # NodePort 30081. 8080 avoids the privileged, often-taken port 80.</span>
+    hostPort: 8080
+
+<span class="c">    # protocol: TCP, because HTTP runs over TCP. TCP is the default; it is written</span>
+<span class="c">    # out so nobody has to guess.</span>
+    protocol: TCP
+
+<span class="c"># role: worker -&gt; runs only kubelet, kube-proxy, the CNI and your pods.</span>
+<span class="c"># Two workers are the minimum that lets us compare "same node" with "across nodes".</span>
+<span class="c"># The first becomes kind-worker (worker1 in the diagrams).</span>
+- role: worker
+
+<span class="c"># The second becomes kind-worker2 (worker2 in the diagrams).</span>
+- role: worker</pre>
+  </details>
+<pre>pwd                            <span class="c"># must end in /K8sFundamentals_Labs</span>
+kind create cluster --config setup/kind-3node.yaml
+kubectl get nodes -o wide      <span class="c"># three nodes, all Ready, with their 172.18.x.x addresses</span>
+<span class="c"># which pod address range each node owns</span>
+kubectl get nodes -o custom-columns=NODE:.metadata.name,IP:.status.addresses[0].address,PODCIDR:.spec.podCIDR
+docker ps --format '{{.Names}}'   <span class="c"># the same three nodes, seen as containers</span></pre>
+  <div class="tscroll">
+  <table>
+    <thead><tr><th>In the diagrams</th><th>Real node name</th><th>How to get a shell on it</th></tr></thead>
+    <tbody>
+      <tr><td>worker1</td><td><code>kind-worker</code></td><td><code>docker exec -it kind-worker bash</code></td></tr>
+      <tr><td>worker2</td><td><code>kind-worker2</code></td><td><code>docker exec -it kind-worker2 bash</code></td></tr>
+      <tr><td>(not drawn)</td><td><code>kind-control-plane</code></td><td><code>docker exec -it kind-control-plane bash</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>kind installs its own CNI (kindnet) during this step, which is why the nodes reach <code>Ready</code>.</p>
+
+  <p class="lbl">Step 5 · Start the test pods</p>
+  <p>Four pods, pinned to nodes so they match the diagrams: <code>web</code>, <code>pod-a</code> and <code>pod-c</code> on <code>kind-worker</code>, and <code>pod-b</code> on <code>kind-worker2</code>. They run netshoot, an image with <code>curl</code>, <code>ping</code>, <code>ip</code>, <code>nslookup</code> and <code>tcpdump</code> built in.</p>
+  <details open>
+    <summary>setup/01-pods.yaml</summary>
+<pre><span class="c"># Four test pods for sections 1 to 3.</span>
+<span class="c"># Used by:  kubectl apply -f setup/01-pods.yaml</span>
+
+<span class="c"># ---------------------------------------------------------------------------</span>
+<span class="c"># Pod "web": two containers in ONE pod, to show they share localhost (section 1).</span>
+<span class="c"># ---------------------------------------------------------------------------</span>
+
+<span class="c"># apiVersion: which API group and version defines this object. Pods belong to the</span>
+<span class="c"># original "core" group, which is written as plain v1.</span>
+apiVersion: v1
+
+<span class="c"># kind: the type of object. A bare Pod (no Deployment around it) is not recreated</span>
+<span class="c"># if it dies. That is fine here and keeps its IP stable while you study it.</span>
+kind: Pod
+
+metadata:
+<span class="c">  # name: how you address the pod in kubectl, e.g. "kubectl exec web ...".</span>
+  name: web
+
+<span class="c">  # labels: free-form key/value tags. On their own they do nothing; the Service</span>
+<span class="c">  # "web" in 04-ingress.yaml finds this pod by looking for app=web.</span>
+  labels:
+    app: web
+
+spec:
+<span class="c">  # nodeSelector: only schedule this pod on a node carrying this label.</span>
+<span class="c">  # kubernetes.io/hostname is a label every node gets automatically.</span>
+<span class="c">  # We pin the pod so the lab matches the diagrams: web lives on worker1.</span>
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker
+
+<span class="c">  # containers: every container listed here shares the pod's single network</span>
+<span class="c">  # namespace: one IP address, one eth0, one localhost.</span>
+  containers:
+
+<span class="c">    # name: needed to pick a container, e.g. "kubectl exec web -c nginx".</span>
+  - name: nginx
+
+<span class="c">    # image: nginx is a ready-made web server on port 80. The tag is pinned so the</span>
+<span class="c">    # lab behaves the same every time; "alpine" is the small variant.</span>
+    image: nginx:1.27-alpine
+
+<span class="c">    # ports/containerPort: documentation only. It does NOT open or publish anything;</span>
+<span class="c">    # nginx listens on 80 whether this line exists or not.</span>
+    ports:
+    - containerPort: 80
+
+<span class="c">    # Second container in the same pod. It will curl localhost:80 and reach nginx,</span>
+<span class="c">    # proving both containers share one network namespace.</span>
+  - name: log-sidecar
+
+<span class="c">    # image: netshoot is a troubleshooting image with curl, ping, ip, nslookup, dig</span>
+<span class="c">    # and tcpdump preinstalled. The nginx image has none of these.</span>
+    image: nicolaka/netshoot:v0.13
+
+<span class="c">    # command: replaces the image's default command (an interactive shell, which</span>
+<span class="c">    # exits at once with no terminal attached). "sleep infinity" keeps the container</span>
+<span class="c">    # alive doing nothing, so you can "kubectl exec" into it whenever you like.</span>
+    command: ["sleep", "infinity"]
+
+<span class="c"># "---" separates one Kubernetes object from the next inside a single file.</span>
+---
+<span class="c"># ---------------------------------------------------------------------------</span>
+<span class="c"># Pod "pod-a": the client in every diagram. Lives on worker1.</span>
+<span class="c"># ---------------------------------------------------------------------------</span>
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-a
+spec:
+<span class="c">  # Pinned to worker1 (kind-worker), the same node as pod-c.</span>
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker
+  containers:
+  - name: netshoot
+<span class="c">    # Network tools, kept alive with sleep; see the notes on pod "web" above.</span>
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "infinity"]
+---
+<span class="c"># ---------------------------------------------------------------------------</span>
+<span class="c"># Pod "pod-c": the SAME-node target. pod-a -&gt; pod-c never leaves worker1.</span>
+<span class="c"># ---------------------------------------------------------------------------</span>
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-c
+spec:
+<span class="c">  # Same node as pod-a on purpose.</span>
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "infinity"]
+---
+<span class="c"># ---------------------------------------------------------------------------</span>
+<span class="c"># Pod "pod-b": the CROSS-node target. pod-a -&gt; pod-b must travel worker1 -&gt; worker2.</span>
+<span class="c"># ---------------------------------------------------------------------------</span>
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-b
+spec:
+<span class="c">  # The other worker on purpose, so the packet has to use the route the CNI installed.</span>
+  nodeSelector:
+    kubernetes.io/hostname: kind-worker2
+  containers:
+  - name: netshoot
+    image: nicolaka/netshoot:v0.13
+    command: ["sleep", "infinity"]</pre>
+  </details>
+<pre>kubectl apply -f setup/01-pods.yaml
+kubectl wait --for=condition=Ready pod --all --timeout=300s   <span class="c"># the first image pull takes a few minutes</span>
+kubectl get pods -o wide       <span class="c"># note each pod's IP and NODE column</span></pre>
+  <p>You now have everything sections 1 to 3 need.</p>
+</section>
+
+<!-- 1 -->
+<section>
+  <h3>Lab 1 · Pod communication</h3>
+  <h2>Inside one pod</h2>
+  <p>A pod is a private network namespace with one interface, <code>eth0</code>. All containers in the pod share it, so they talk over <code>localhost</code>. The other end of <code>eth0</code> is a virtual cable (a veth pair) that surfaces on the node.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 300" role="img" aria-label="A pod's containers share one network namespace; its eth0 is one end of a veth pair whose other end sits in the node, where a route points at it.">
+      <rect class="node" x="10" y="10" width="860" height="280" rx="6"/>
+      <text class="b" x="26" y="34">worker1 · node (root) network namespace</text>
+      <rect class="pod" x="40" y="60" width="400" height="200" rx="6"/>
+      <text class="b" x="56" y="84">pod web · its own network namespace</text>
+      <rect class="box" x="60" y="104" width="160" height="56" rx="4"/>
+      <text class="b" x="74" y="128">nginx</text><text class="dim" x="74" y="146">listens on :80</text>
+      <rect class="box" x="260" y="104" width="160" height="56" rx="4"/>
+      <text class="b" x="274" y="128">log-sidecar</text><text class="dim" x="274" y="146">curl localhost:80</text>
+      <line class="ln a" x1="260" y1="132" x2="222" y2="132" marker-end="url(#ma)"/>
+      <text class="a" x="240" y="182" text-anchor="middle">localhost (shared)</text>
+      <rect class="hot" x="170" y="206" width="140" height="36" rx="4"/>
+      <text x="240" y="229" text-anchor="middle">eth0 10.244.1.5</text>
+      <line class="ln p" x1="310" y1="224" x2="558" y2="224" marker-end="url(#mp)" marker-start="url(#mp)"/>
+      <text class="p" x="500" y="216" text-anchor="middle">veth pair</text>
+      <rect class="hot" x="560" y="206" width="150" height="36" rx="4"/>
+      <text x="635" y="229" text-anchor="middle">veth1a2b (node)</text>
+      <rect class="box" x="500" y="60" width="340" height="96" rx="4"/>
+      <text class="b" x="516" y="84">node routing table</text>
+      <text x="516" y="110">10.244.1.5 dev veth1a2b</text>
+      <text class="dim" x="516" y="132">10.244.2.0/24 via 172.18.0.4</text>
+      <line class="ln p" x1="635" y1="206" x2="635" y2="158" marker-end="url(#mp)"/>
+    </svg>
+    </div>
+    <figcaption>Anything leaving the pod crosses the veth pair and lands in the node's routing table, which decides where it goes next.</figcaption>
+  </figure>
+<pre><span class="c"># containers in one pod share localhost</span>
+kubectl exec web -c log-sidecar -- curl -s localhost:80
+<span class="c"># the pod's only interface</span>
+kubectl exec web -c log-sidecar -- ip addr show eth0
+<span class="c"># the node's route to that pod (one line, naming a veth)</span>
+docker exec kind-worker ip route | grep "$(kubectl get pod web -o jsonpath='{.status.podIP}')"</pre>
+</section>
+
+<!-- 2 -->
+<section>
+  <h3>Lab 1 and 2 · Pod to pod</h3>
+  <h2>Same node and across nodes</h2>
+  <p>Pod A pings pod C on the same node, then pod B on another node. Both use the same logic: leave through the veth, let the node's routing table choose. The only difference is whether the next hop is a local veth or another node.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 350" role="img" aria-label="Pod A reaches pod C through worker1's routing table, and pod B by being routed from worker1 to worker2 with source and destination pod IPs unchanged.">
+      <rect class="node" x="10" y="10" width="410" height="270" rx="6"/>
+      <rect class="node" x="460" y="10" width="410" height="270" rx="6"/>
+      <text class="b" x="26" y="34">worker1 · pod CIDR 10.244.1.0/24</text>
+      <text class="b" x="476" y="34">worker2 · pod CIDR 10.244.2.0/24</text>
+      <rect class="pod" x="40" y="56" width="150" height="60" rx="4"/>
+      <text class="b" x="115" y="80" text-anchor="middle">pod A</text><text x="115" y="100" text-anchor="middle">10.244.1.5</text>
+      <rect class="pod" x="240" y="56" width="150" height="60" rx="4"/>
+      <text class="b" x="315" y="80" text-anchor="middle">pod C</text><text x="315" y="100" text-anchor="middle">10.244.1.6</text>
+      <rect class="pod" x="590" y="56" width="150" height="60" rx="4"/>
+      <text class="b" x="665" y="80" text-anchor="middle">pod B</text><text x="665" y="100" text-anchor="middle">10.244.2.7</text>
+      <rect class="box" x="40" y="160" width="350" height="50" rx="4"/>
+      <text x="54" y="181">10.244.1.6 dev vethC</text>
+      <text x="54" y="199">10.244.2.0/24 via 172.18.0.4</text>
+      <rect class="box" x="490" y="160" width="350" height="50" rx="4"/>
+      <text x="504" y="190">10.244.2.7 dev vethB</text>
+      <rect class="box" x="135" y="232" width="160" height="32" rx="4"/>
+      <text x="215" y="253" text-anchor="middle">eth0 172.18.0.3</text>
+      <rect class="box" x="585" y="232" width="160" height="32" rx="4"/>
+      <text x="665" y="253" text-anchor="middle">eth0 172.18.0.4</text>
+      <!-- same node -->
+      <line class="ln a" x1="80" y1="116" x2="80" y2="158" marker-end="url(#ma)"/>
+      <line class="ln a" x1="340" y1="160" x2="340" y2="118" marker-end="url(#ma)"/>
+      <text class="a" x="215" y="142" text-anchor="middle">1 same node</text>
+      <!-- cross node -->
+      <line class="ln p" x1="150" y1="116" x2="150" y2="158" marker-end="url(#mp)"/>
+      <line class="ln p" x1="215" y1="210" x2="215" y2="230" marker-end="url(#mp)"/>
+      <polyline class="ln p" points="215,264 215,310 665,310 665,266" marker-end="url(#mp)"/>
+      <line class="ln p" x1="665" y1="232" x2="665" y2="212" marker-end="url(#mp)"/>
+      <line class="ln p" x1="665" y1="160" x2="665" y2="118" marker-end="url(#mp)"/>
+      <text class="dim" x="440" y="302" text-anchor="middle">node network 172.18.0.0/16</text>
+      <text class="p" x="440" y="332" text-anchor="middle">2 cross node: src 10.244.1.5 → dst 10.244.2.7, unchanged</text>
+    </svg>
+    </div>
+    <figcaption>The route <code>10.244.2.0/24 via 172.18.0.4</code> is what the CNI installs. Without a CNI that line is missing and cross-node traffic has nowhere to go.</figcaption>
+  </figure>
+  <ol>
+    <li>Pod A sends to 10.244.2.7. Its only route is "everything goes out <code>eth0</code>".</li>
+    <li>The packet appears on worker1. The routing table matches <code>10.244.2.0/24 via 172.18.0.4</code>.</li>
+    <li>worker1 forwards it out its own <code>eth0</code> to worker2.</li>
+    <li>worker2 matches <code>10.244.2.7 dev vethB</code> and pushes it down that veth into pod B.</li>
+    <li>Pod B sees the source as 10.244.1.5, pod A's real IP. The reply takes the same path back.</li>
+  </ol>
+<pre>kubectl get pods -o wide                      <span class="c"># pod IPs and which node each is on</span>
+docker exec kind-worker ip route              <span class="c"># the routes in the diagram</span>
+<span class="c"># watch packets arrive on worker2 while you ping from pod A</span>
+kubectl debug node/kind-worker2 -it --profile=sysadmin --image=nicolaka/netshoot:v0.13 -- tcpdump -ni any icmp
+<span class="c"># in a second terminal: same node first, then across nodes</span>
+kubectl exec pod-a -- ping -c 3 "$(kubectl get pod pod-c -o jsonpath='{.status.podIP}')"
+kubectl exec pod-a -- ping -c 3 "$(kubectl get pod pod-b -o jsonpath='{.status.podIP}')"</pre>
+</section>
+
+<!-- 3 -->
+<section>
+  <h3>Lab 2 · CNI</h3>
+  <h2>Routed versus overlay</h2>
+  <p>CNIs differ mainly in how they carry a pod packet between nodes. A routed CNI sends it as it is. An overlay CNI wraps it inside a node-to-node packet, which works even when the network between nodes knows nothing about pod IPs.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 200" role="img" aria-label="A routed packet carries pod IPs directly; an overlay packet adds an outer node-to-node IP header and a VXLAN header around the same pod packet.">
+      <text class="b" x="10" y="26">Routed (kindnet): the pod packet travels as it is</text>
+      <rect class="pod" x="10" y="38" width="300" height="44"/>
+      <text x="160" y="65" text-anchor="middle">IP 10.244.1.5 → 10.244.2.7</text>
+      <rect class="box" x="310" y="38" width="130" height="44"/>
+      <text x="375" y="65" text-anchor="middle">TCP :8080</text>
+      <rect class="box" x="440" y="38" width="160" height="44"/>
+      <text x="520" y="65" text-anchor="middle">HTTP payload</text>
+      <text class="b" x="10" y="124">Overlay (VXLAN): the same packet rides inside a node-to-node packet</text>
+      <rect class="hot" x="10" y="136" width="270" height="44"/>
+      <text x="145" y="163" text-anchor="middle">IP 172.18.0.3 → 172.18.0.4</text>
+      <rect class="hot" x="280" y="136" width="170" height="44"/>
+      <text x="365" y="163" text-anchor="middle">UDP 4789 · VXLAN</text>
+      <rect class="pod" x="450" y="136" width="230" height="44"/>
+      <text x="565" y="163" text-anchor="middle">IP 10.244.1.5 → 10.244.2.7</text>
+      <rect class="box" x="680" y="136" width="90" height="44"/>
+      <text x="725" y="163" text-anchor="middle">TCP :8080</text>
+      <rect class="box" x="770" y="136" width="100" height="44"/>
+      <text x="820" y="163" text-anchor="middle">payload</text>
+    </svg>
+    </div>
+    <figcaption>The orange headers are the cost of an overlay: about 50 extra bytes per packet, in exchange for not needing pod routes on the underlying network.</figcaption>
+  </figure>
+</section>
+
+<!-- 4 -->
+<section>
+  <h3>Lab 3 · Services</h3>
+  <h2>A Service IP is a rewrite rule</h2>
+  <p>Pod IPs change every time a pod restarts, so clients use a stable Service IP instead. No interface anywhere owns that IP. kube-proxy writes rules on every node that rewrite the destination to one real pod before the packet is routed.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 300" role="img" aria-label="Pod A sends to the Service IP; iptables rules on its own node rewrite the destination to one of three backing pod IPs, here api-2.">
+      <rect class="pod" x="10" y="115" width="140" height="70" rx="4"/>
+      <text class="b" x="80" y="144" text-anchor="middle">pod A</text><text x="80" y="164" text-anchor="middle">10.244.1.5</text>
+      <line class="ln p" x1="150" y1="150" x2="298" y2="150" marker-end="url(#mp)"/>
+      <text class="p" x="225" y="140" text-anchor="middle">dst 10.96.0.50:80</text>
+      <text class="dim" x="225" y="170" text-anchor="middle">the Service IP</text>
+      <rect class="node" x="300" y="30" width="250" height="240" rx="6"/>
+      <text class="b" x="316" y="56">iptables on worker1</text>
+      <text class="dim" x="316" y="74">written by kube-proxy</text>
+      <text x="316" y="112">1 match dst 10.96.0.50:80</text>
+      <text x="316" y="142">2 pick 1 of 3 endpoints</text>
+      <text x="316" y="172">3 DNAT → 10.244.2.7:8080</text>
+      <text class="dim" x="316" y="222">conntrack remembers the</text>
+      <text class="dim" x="316" y="240">choice and undoes it on reply</text>
+      <line class="ln p" x1="550" y1="150" x2="708" y2="150" marker-end="url(#mp)"/>
+      <text class="p" x="628" y="140" text-anchor="middle">dst 10.244.2.7:8080</text>
+      <line class="ln dash" x1="550" y1="120" x2="708" y2="66" marker-end="url(#m)"/>
+      <line class="ln dash" x1="550" y1="180" x2="708" y2="234" marker-end="url(#m)"/>
+      <rect class="pod" x="710" y="36" width="160" height="56" rx="4"/>
+      <text class="b" x="790" y="60" text-anchor="middle">api-1</text><text x="790" y="78" text-anchor="middle">10.244.1.6</text>
+      <rect class="hot" x="710" y="122" width="160" height="56" rx="4"/>
+      <text class="b" x="790" y="146" text-anchor="middle">api-2</text><text x="790" y="164" text-anchor="middle">10.244.2.7</text>
+      <rect class="pod" x="710" y="208" width="160" height="56" rx="4"/>
+      <text class="b" x="790" y="232" text-anchor="middle">api-3</text><text x="790" y="250" text-anchor="middle">10.244.2.8</text>
+    </svg>
+    </div>
+    <figcaption>The rewrite happens on the client's own node. After it, the packet is an ordinary pod-to-pod packet and follows the previous diagram.</figcaption>
+  </figure>
+  <ol>
+    <li>The Service's selector matches three pods; Kubernetes records their IPs in an EndpointSlice.</li>
+    <li>kube-proxy on every node turns that list into rules: one per Service, one per endpoint.</li>
+    <li>Pod A's packet to 10.96.0.50:80 hits those rules and leaves with destination 10.244.2.7:8080.</li>
+    <li>Scale the Deployment and the EndpointSlice changes, so the rules change within a second or two.</li>
+  </ol>
+  <p class="lbl">Set up · three api pods and a Service</p>
+  <details open>
+    <summary>setup/02-api.yaml</summary>
+<pre><span class="c"># The "api" application: three identical pods plus one Service in front of them.</span>
+<span class="c"># Used by:  kubectl apply -f setup/02-api.yaml   (sections 4 to 8)</span>
+
+<span class="c"># apiVersion: Deployments live in the "apps" API group, version v1.</span>
+apiVersion: apps/v1
+
+<span class="c"># kind: a Deployment keeps a set number of identical pods running and replaces any</span>
+<span class="c"># that die. Replacements get NEW IP addresses, which is exactly why clients need a</span>
+<span class="c"># Service instead of talking to pod IPs.</span>
+kind: Deployment
+
+metadata:
+<span class="c">  # name: the Deployment's name. Its pods are named api-&lt;hash&gt;-&lt;random&gt;.</span>
+  name: api
+
+spec:
+<span class="c">  # replicas: how many pods to keep running. Three gives the Service something to</span>
+<span class="c">  # choose between and usually puts pods on both workers.</span>
+  replicas: 3
+
+<span class="c">  # selector: how the Deployment recognises its own pods. It must match the labels</span>
+<span class="c">  # in "template" below, otherwise the API server rejects the Deployment.</span>
+  selector:
+    matchLabels:
+      app: api
+
+<span class="c">  # template: the blueprint every pod is stamped from.</span>
+  template:
+    metadata:
+<span class="c">      # labels: put on each pod. Two things look for app=api:</span>
+<span class="c">      # the Deployment's selector above and the Service's selector below.</span>
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: whoami
+
+<span class="c">        # image: a tiny web server that answers any request with its own hostname</span>
+<span class="c">        # and the address the request came from (RemoteAddr). That makes it visible</span>
+<span class="c">        # which pod answered and whether the client IP survived the trip.</span>
+        image: traefik/whoami:v1.10
+
+<span class="c">        # args: options handed to the program. whoami listens on 80 by default;</span>
+<span class="c">        # we move it to 8080 so the Service visibly translates port 80 -&gt; 8080.</span>
+        args: ["--port=8080"]
+
+<span class="c">        # containerPort: documentation of the listening port. Informational only.</span>
+        ports:
+        - containerPort: 8080
+---
+<span class="c"># apiVersion: Services belong to the core group, written as v1.</span>
+apiVersion: v1
+
+<span class="c"># kind: a Service is a stable virtual IP and DNS name in front of changing pods.</span>
+kind: Service
+
+metadata:
+<span class="c">  # name: becomes the DNS name. Pods in the same namespace reach it as "api",</span>
+<span class="c">  # in full: api.default.svc.cluster.local</span>
+  name: api
+
+spec:
+<span class="c">  # type: not set, so it is ClusterIP: reachable only from inside the cluster.</span>
+<span class="c">  # Section 6 patches it to NodePort and section 7 to LoadBalancer.</span>
+
+<span class="c">  # selector: send traffic to every Ready pod labelled app=api. Kubernetes keeps the</span>
+<span class="c">  # matching pod IPs in an EndpointSlice, and kube-proxy turns that into rules.</span>
+  selector:
+    app: api
+
+  ports:
+<span class="c">    # port: the port clients dial on the Service IP (http://api:80).</span>
+  - port: 80
+
+<span class="c">    # targetPort: the port on the pod the traffic is rewritten to. It must equal the</span>
+<span class="c">    # port the container really listens on (the --port=8080 above).</span>
+    targetPort: 8080</pre>
+  </details>
+<pre>kubectl apply -f setup/02-api.yaml
+kubectl rollout status deploy/api
+kubectl get svc api            <span class="c"># CLUSTER-IP is the Service IP in the diagram</span>
+kubectl get pods -l app=api -o wide</pre>
+  <p class="lbl">Watch it</p>
+<pre>kubectl get endpointslices -l kubernetes.io/service-name=api
+docker exec kind-worker iptables-save -t nat | grep -E 'KUBE-(SVC|SEP)' | grep api
+<span class="c"># hit the Service 6 times and see different pods answer</span>
+kubectl exec pod-a -- sh -c 'for i in 1 2 3 4 5 6; do curl -s api | grep Hostname; done'
+<span class="c"># scale and watch the endpoint list follow</span>
+kubectl scale deploy api --replicas=5 && kubectl get endpointslices -l kubernetes.io/service-name=api
+kubectl scale deploy api --replicas=3</pre>
+</section>
+
+<!-- 5 -->
+<section>
+  <h3>Lab 6 · DNS</h3>
+  <h2>How a name becomes a Service IP</h2>
+  <p>Nobody types 10.96.0.50. Every pod is started with a <code>resolv.conf</code> pointing at CoreDNS, which watches the API server and answers with the Service's IP. DNS only hands back an address; the traffic itself never passes through CoreDNS.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 280" role="img" aria-label="Pod A asks CoreDNS for the api Service name, gets back the ClusterIP, then connects to that IP itself.">
+      <rect class="pod" x="10" y="20" width="270" height="140" rx="4"/>
+      <text class="b" x="24" y="44">pod A · /etc/resolv.conf</text>
+      <text x="24" y="72">nameserver 10.96.0.10</text>
+      <text x="24" y="94">search default.svc.cluster.local</text>
+      <text x="24" y="112">       svc.cluster.local</text>
+      <text x="24" y="130">       cluster.local</text>
+      <text x="24" y="150">options ndots:5</text>
+      <rect class="node" x="600" y="20" width="270" height="140" rx="6"/>
+      <text class="b" x="616" y="44">CoreDNS pods</text>
+      <text x="616" y="72">Service kube-dns</text>
+      <text x="616" y="92">10.96.0.10:53</text>
+      <text class="dim" x="616" y="126">watches Services through</text>
+      <text class="dim" x="616" y="144">the API server</text>
+      <line class="ln p" x1="280" y1="64" x2="598" y2="64" marker-end="url(#mp)"/>
+      <text class="p" x="440" y="54" text-anchor="middle">1 api.default.svc.cluster.local ?</text>
+      <line class="ln a" x1="600" y1="124" x2="282" y2="124" marker-end="url(#ma)"/>
+      <text class="a" x="440" y="114" text-anchor="middle">2 A 10.96.0.50</text>
+      <line class="ln p" x1="145" y1="160" x2="145" y2="218" marker-end="url(#mp)"/>
+      <text class="p" x="160" y="194">3 connect to 10.96.0.50:80</text>
+      <rect class="box" x="10" y="220" width="270" height="44" rx="4"/>
+      <text x="145" y="247" text-anchor="middle">Service api 10.96.0.50</text>
+      <text class="dim" x="300" y="247">then the rewrite from the previous diagram</text>
+    </svg>
+    </div>
+    <figcaption>Typing <code>curl api</code> works because the first <code>search</code> entry is appended, giving <code>api.default.svc.cluster.local</code>.</figcaption>
+  </figure>
+  <p><code>ndots:5</code> means a name with fewer than five dots is tried against each search entry first. That is why one lookup of an outside name produces four queries:</p>
+<pre>curl example.com
+  example.com.default.svc.cluster.local   → NXDOMAIN
+  example.com.svc.cluster.local           → NXDOMAIN
+  example.com.cluster.local               → NXDOMAIN
+  example.com.                            → answer</pre>
+<pre>kubectl exec pod-a -- cat /etc/resolv.conf
+kubectl exec pod-a -- nslookup api
+<span class="c"># watch the four queries go by</span>
+kubectl debug node/kind-worker -it --profile=sysadmin --image=nicolaka/netshoot:v0.13 -- tcpdump -ni any port 53</pre>
+</section>
+
+<!-- 6 -->
+<section>
+  <h3>Lab 4 · NodePort</h3>
+  <h2>Opening a door on every node</h2>
+  <p>A NodePort Service opens the same port on every node, whether or not that node runs a matching pod. A node without one forwards the packet to a node that has, and rewrites the source on the way so the reply comes back through it.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 330" role="img" aria-label="A client hits port 30080 on worker1, which has no api pod; worker1 rewrites destination and source and forwards to the pod on worker2, so the pod no longer sees the client's IP. With externalTrafficPolicy Local the client goes straight to worker2 and its IP is kept.">
+      <rect class="box" x="10" y="135" width="150" height="60" rx="4"/>
+      <text class="b" x="85" y="160" text-anchor="middle">client</text><text x="85" y="180" text-anchor="middle">172.18.0.9</text>
+      <rect class="node" x="330" y="20" width="300" height="120" rx="6"/>
+      <text class="b" x="346" y="44">worker1 172.18.0.3</text>
+      <text class="dim" x="346" y="68">:30080 open, no api pod here</text>
+      <text x="346" y="96">DNAT dst → 10.244.2.7:8080</text>
+      <text x="346" y="118">SNAT src → 172.18.0.3</text>
+      <rect class="node" x="330" y="190" width="300" height="120" rx="6"/>
+      <text class="b" x="346" y="214">worker2 172.18.0.4</text>
+      <rect class="pod" x="350" y="236" width="180" height="56" rx="4"/>
+      <text class="b" x="440" y="260" text-anchor="middle">api</text><text x="440" y="278" text-anchor="middle">10.244.2.7:8080</text>
+      <line class="ln p" x1="160" y1="150" x2="328" y2="84" marker-end="url(#mp)"/>
+      <text class="p" x="120" y="92">dst 172.18.0.3:30080</text>
+      <line class="ln p" x1="500" y1="140" x2="500" y2="234" marker-end="url(#mp)"/>
+      <text class="p" x="512" y="170">extra hop</text>
+      <text x="650" y="258">pod sees src 172.18.0.3,</text>
+      <text x="650" y="276">not the client</text>
+      <line class="ln a dash" x1="160" y1="180" x2="348" y2="262" marker-end="url(#ma)"/>
+      <text class="a" x="10" y="322">externalTrafficPolicy: Local → straight in, client IP kept</text>
+    </svg>
+    </div>
+    <figcaption>The default policy (<code>Cluster</code>) works from any node but hides the client's IP. <code>Local</code> keeps the IP but only nodes that run a pod answer.</figcaption>
+  </figure>
+  <p class="lbl">Set up · turn the Service into a NodePort</p>
+<pre>kubectl patch svc api -p '{"spec":{"type":"NodePort","ports":[{"port":80,"nodePort":30080}]}}'
+kubectl get svc api            <span class="c"># PORT(S) now shows 80:30080/TCP</span>
+<span class="c"># the real node addresses</span>
+W1=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' kind-worker)
+W2=$(docker inspect -f '{{.NetworkSettings.Networks.kind.IPAddress}}' kind-worker2)
+echo $W1 $W2</pre>
+  <p class="lbl">Watch it</p>
+  <p>Your Mac cannot reach node IPs directly, because Docker runs in a VM. A throwaway container on the same Docker network plays the outside client.</p>
+<pre><span class="c"># default policy: RemoteAddr is a node-side address, not the client's</span>
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $W1:30080 | grep -E 'Hostname|RemoteAddr'
+
+<span class="c"># Local policy: RemoteAddr becomes the client container's own 172.18.x.x address</span>
+kubectl patch svc api -p '{"spec":{"externalTrafficPolicy":"Local"}}'
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $W1:30080 | grep -E 'Hostname|RemoteAddr'
+
+<span class="c"># Local policy with one pod: the node without the pod stops answering</span>
+kubectl scale deploy api --replicas=1 && kubectl get pods -l app=api -o wide
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 $W1:30080 | grep Hostname
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 $W2:30080 | grep Hostname
+
+<span class="c"># put it back</span>
+kubectl scale deploy api --replicas=3
+kubectl patch svc api -p '{"spec":{"externalTrafficPolicy":"Cluster"}}'</pre>
+</section>
+
+<!-- 7 -->
+<section>
+  <h3>Lab 5 · Load balancers</h3>
+  <h2>One stable IP in front of the nodes</h2>
+  <p>A <code>LoadBalancer</code> Service asks something outside Kubernetes for an address. In a cloud that is the provider's load balancer. On your Mac it is MetalLB: one node claims the IP by answering ARP for it, and from there the packet follows the same rewrite rules as before.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 250" role="img" aria-label="The client asks by ARP who owns the load balancer IP; the MetalLB speaker on worker1 answers, the client sends the packet to worker1, and iptables rewrites it to a pod.">
+      <rect class="box" x="10" y="60" width="140" height="130" rx="4"/>
+      <text class="b" x="80" y="118" text-anchor="middle">client</text><text x="80" y="138" text-anchor="middle">172.18.0.9</text>
+      <rect class="node" x="360" y="20" width="240" height="210" rx="6"/>
+      <text class="b" x="376" y="44">worker1 172.18.0.3</text>
+      <rect class="box" x="380" y="64" width="200" height="44" rx="4"/>
+      <text x="480" y="91" text-anchor="middle">MetalLB speaker</text>
+      <rect class="box" x="380" y="150" width="200" height="44" rx="4"/>
+      <text x="480" y="177" text-anchor="middle">iptables DNAT</text>
+      <line class="ln a" x1="150" y1="86" x2="378" y2="86" marker-end="url(#ma)" marker-start="url(#ma)"/>
+      <text class="a" x="264" y="76" text-anchor="middle">1 ARP who has 172.18.255.200?</text>
+      <text class="dim" x="264" y="106" text-anchor="middle">reply: worker1's MAC</text>
+      <line class="ln p" x1="150" y1="172" x2="378" y2="172" marker-end="url(#mp)"/>
+      <text class="p" x="264" y="162" text-anchor="middle">2 dst 172.18.255.200:80</text>
+      <line class="ln p" x1="580" y1="172" x2="698" y2="172" marker-end="url(#mp)"/>
+      <text class="p" x="640" y="162" text-anchor="middle">3 DNAT</text>
+      <rect class="pod" x="700" y="144" width="170" height="56" rx="4"/>
+      <text class="b" x="785" y="168" text-anchor="middle">api</text><text x="785" y="186" text-anchor="middle">10.244.2.7:8080</text>
+    </svg>
+    </div>
+    <figcaption>Without MetalLB nothing answers step 1, which is why <code>EXTERNAL-IP</code> stays <code>&lt;pending&gt;</code> on a bare kind cluster. The pod can be on any node; worker1 is only the entry point.</figcaption>
+  </figure>
+  <p class="lbl">Set up · install MetalLB and give it addresses</p>
+<pre><span class="c"># before MetalLB: ask for a load balancer and watch it stay pending</span>
+kubectl patch svc api -p '{"spec":{"type":"LoadBalancer"}}'
+kubectl get svc api            <span class="c"># EXTERNAL-IP &lt;pending&gt;</span>
+
+<span class="c"># install MetalLB</span>
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
+kubectl wait -n metallb-system --for=condition=Ready pod -l app=metallb --timeout=180s
+
+<span class="c"># the pool must sit inside the kind network; edit the file if this is not 172.18.0.0/16</span>
+docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
+kubectl apply -f setup/03-metallb-pool.yaml</pre>
+  <details open>
+    <summary>setup/03-metallb-pool.yaml</summary>
+<pre><span class="c"># Tells MetalLB which addresses it may hand out and how to announce them.</span>
+<span class="c"># Apply AFTER installing MetalLB, because these object types only exist once</span>
+<span class="c"># MetalLB's own definitions (CRDs) are installed.</span>
+<span class="c"># Used by:  kubectl apply -f setup/03-metallb-pool.yaml   (section 7)</span>
+
+<span class="c"># apiVersion: a custom API group that MetalLB adds to the cluster.</span>
+apiVersion: metallb.io/v1beta1
+
+<span class="c"># kind: an IPAddressPool is a range of addresses MetalLB may give to Services of</span>
+<span class="c"># type LoadBalancer. With no pool, such Services stay at EXTERNAL-IP &lt;pending&gt;.</span>
+kind: IPAddressPool
+
+metadata:
+<span class="c">  # name: any name; the L2Advertisement below could refer to it.</span>
+  name: kind-pool
+
+<span class="c">  # namespace: MetalLB only reads its configuration from its own namespace.</span>
+<span class="c">  # Put this anywhere else and it is silently ignored.</span>
+  namespace: metallb-system
+
+spec:
+<span class="c">  # addresses: the range to hand out. Two rules decide the choice:</span>
+<span class="c">  #   1. It must be INSIDE the kind Docker network (normally 172.18.0.0/16), because</span>
+<span class="c">  #      layer-2 mode works by ARP and ARP only reaches machines on the same network.</span>
+<span class="c">  #   2. It must not collide with addresses Docker gives to containers. Docker</span>
+<span class="c">  #      assigns from the bottom (172.18.0.2, .3, ...), so we take the far top.</span>
+<span class="c">  # Check your network with:</span>
+<span class="c">  #   docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'</span>
+  addresses:
+  - 172.18.255.200-172.18.255.250
+---
+apiVersion: metallb.io/v1beta1
+
+<span class="c"># kind: an L2Advertisement switches on layer-2 mode: one node answers ARP requests</span>
+<span class="c"># for each assigned address, so traffic for that address arrives at that node.</span>
+<span class="c"># Without this object MetalLB assigns the IP but nobody answers for it.</span>
+kind: L2Advertisement
+
+metadata:
+  name: kind-l2
+<span class="c">  # Same rule as above: must be in MetalLB's namespace.</span>
+  namespace: metallb-system
+
+<span class="c"># No "spec" on purpose: an empty L2Advertisement announces every pool.</span></pre>
+  </details>
+  <p class="lbl">Watch it</p>
+<pre>kubectl get svc api                           <span class="c"># EXTERNAL-IP 172.18.255.200</span>
+docker run --rm --network kind nicolaka/netshoot:v0.13 arping -c 2 172.18.255.200
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s 172.18.255.200</pre>
+</section>
+
+<!-- 8 -->
+<section>
+  <h3>Lab 7 · Ingress and Gateway API</h3>
+  <h2>Routing by hostname and path</h2>
+  <p>Everything so far works on IPs and ports. An ingress controller is an ordinary proxy pod that reads the HTTP request and chooses a backend from the <code>Host</code> header and path, so many apps can share one load balancer IP.</p>
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 290" role="img" aria-label="A request for shop.local/api reaches the ingress controller pod, which matches host and path and forwards to an api pod instead of a web pod.">
+      <rect class="box" x="10" y="110" width="130" height="60" rx="4"/>
+      <text class="b" x="75" y="145" text-anchor="middle">browser</text>
+      <line class="ln p" x1="140" y1="140" x2="328" y2="140" marker-end="url(#mp)"/>
+      <text class="p" x="234" y="130" text-anchor="middle">GET /api</text>
+      <text class="p" x="234" y="160" text-anchor="middle">Host: shop.local</text>
+      <text class="dim" x="234" y="182" text-anchor="middle">via LB IP or NodePort</text>
+      <rect class="node" x="330" y="30" width="250" height="230" rx="6"/>
+      <text class="b" x="346" y="56">ingress controller pod</text>
+      <text class="dim" x="346" y="74">a proxy: Traefik, Envoy…</text>
+      <text x="346" y="116">Host shop.local</text>
+      <text x="346" y="140">  /     → svc web</text>
+      <text class="p" x="346" y="164">  /api  → svc api</text>
+      <text class="dim" x="346" y="216">opens its own connection</text>
+      <text class="dim" x="346" y="234">to a pod IP</text>
+      <line class="ln dash" x1="580" y1="110" x2="678" y2="76" marker-end="url(#m)"/>
+      <line class="ln p" x1="580" y1="170" x2="678" y2="210" marker-end="url(#mp)"/>
+      <rect class="pod" x="680" y="40" width="190" height="56" rx="4"/>
+      <text class="b" x="775" y="64" text-anchor="middle">web pods</text><text x="775" y="82" text-anchor="middle">10.244.1.8:80</text>
+      <rect class="hot" x="680" y="190" width="190" height="56" rx="4"/>
+      <text class="b" x="775" y="214" text-anchor="middle">api pods</text><text x="775" y="232" text-anchor="middle">10.244.2.7:8080</text>
+    </svg>
+    </div>
+    <figcaption>An <code>Ingress</code> or <code>HTTPRoute</code> object is only the rule table in the middle. Without a controller pod running, the object does nothing.</figcaption>
+  </figure>
+  <p class="lbl">Set up · install a controller and add the rules</p>
+<pre><span class="c"># the controller: Traefik, exposed on NodePort 30081 (which kind maps to localhost:8080)</span>
+helm repo add traefik https://traefik.github.io/charts && helm repo update
+helm install traefik traefik/traefik -n traefik --create-namespace \
+  --set service.type=NodePort --set ports.web.nodePort=30081
+kubectl -n traefik rollout status deploy/traefik
+
+<span class="c"># a Service for the web pod, plus the Ingress rules</span>
+kubectl apply -f setup/04-ingress.yaml
+kubectl get ingress shop</pre>
+  <details open>
+    <summary>setup/04-ingress.yaml</summary>
+<pre><span class="c"># A Service for the web pod, plus the Ingress rules that route by host and path.</span>
+<span class="c"># Apply AFTER installing Traefik.</span>
+<span class="c"># Used by:  kubectl apply -f setup/04-ingress.yaml   (section 8)</span>
+
+<span class="c"># An Ingress can only point at Services, never at pods directly, so the web pod</span>
+<span class="c"># from 01-pods.yaml needs a Service first.</span>
+apiVersion: v1
+kind: Service
+
+metadata:
+<span class="c">  # name: the Ingress below refers to this Service by this name.</span>
+  name: web
+
+spec:
+<span class="c">  # selector: matches the label app=web on the pod "web".</span>
+  selector:
+    app: web
+
+  ports:
+<span class="c">    # port: the Service port the Ingress will name.</span>
+  - port: 80
+<span class="c">    # targetPort: nginx inside the pod listens on 80.</span>
+    targetPort: 80
+---
+<span class="c"># apiVersion: Ingress lives in the networking.k8s.io group, version v1.</span>
+apiVersion: networking.k8s.io/v1
+
+<span class="c"># kind: an Ingress is only a table of routing rules. It moves no traffic itself;</span>
+<span class="c"># a controller pod (Traefik here) reads it and configures its proxy to match.</span>
+kind: Ingress
+
+metadata:
+  name: shop
+
+spec:
+<span class="c">  # ingressClassName: which controller should act on these rules. The Traefik Helm</span>
+<span class="c">  # chart creates a class called "traefik". Leave this out, or name a class nobody</span>
+<span class="c">  # serves, and the rules are ignored without any error.</span>
+  ingressClassName: traefik
+
+  rules:
+<span class="c">    # host: these rules apply only when the request's Host header is shop.local.</span>
+<span class="c">    # Any other Host gets a 404 from the controller. This is what lets many sites</span>
+<span class="c">    # share one IP address.</span>
+  - host: shop.local
+
+<span class="c">    # http: rules for HTTP traffic (the only kind an Ingress understands).</span>
+    http:
+      paths:
+
+<span class="c">        # path: match on the URL path.</span>
+      - path: /api
+
+<span class="c">        # pathType: Prefix matches /api and everything under it (/api/users).</span>
+<span class="c">        # The alternatives are Exact (only /api) and ImplementationSpecific.</span>
+        pathType: Prefix
+
+<span class="c">        # backend: where matching requests go. "number" is the Service's port (80),</span>
+<span class="c">        # not the pod's targetPort (8080); the Service does that translation.</span>
+        backend:
+          service:
+            name: api
+            port:
+              number: 80
+
+<span class="c">        # The catch-all. The longest matching prefix wins regardless of the order</span>
+<span class="c">        # written here, so /api/... goes to "api" and everything else to "web".</span>
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 80</pre>
+  </details>
+  <p class="lbl">Watch it</p>
+  <p>These run straight from your Mac terminal, because <code>localhost:8080</code> is forwarded into the cluster.</p>
+<pre><span class="c"># same IP, different Host and path, different backend</span>
+curl -H 'Host: shop.local' http://localhost:8080/
+curl -H 'Host: shop.local' http://localhost:8080/api
+curl -H 'Host: other.local' http://localhost:8080/     <span class="c"># 404: no rule matches</span></pre>
+</section>
+
+<!-- summary -->
+<section>
+  <h3>Lab 8 · Capstone</h3>
+  <h2>The whole trip, layer by layer</h2>
+  <p>When something breaks, walk this table top to bottom and find the first row whose check fails.</p>
+  <div class="tscroll">
+  <table>
+    <thead><tr><th>Layer</th><th>Question it answers</th><th>Who does it</th><th>Check</th></tr></thead>
+    <tbody>
+      <tr><td>DNS</td><td>What IP is this name?</td><td>CoreDNS</td><td><code>nslookup api</code></td></tr>
+      <tr><td>Load balancer</td><td>Which node takes traffic for this IP?</td><td>MetalLB or cloud</td><td><code>kubectl get svc</code></td></tr>
+      <tr><td>Ingress</td><td>Which Service gets this host and path?</td><td>Controller pod</td><td><code>kubectl describe ingress</code></td></tr>
+      <tr><td>Service</td><td>Which pod backs this Service IP?</td><td>kube-proxy rules</td><td><code>kubectl get endpointslices</code></td></tr>
+      <tr><td>Pod network</td><td>How do I reach that pod's node?</td><td>CNI routes</td><td><code>ip route</code> on the node</td></tr>
+      <tr><td>Pod</td><td>Is the app listening on that port?</td><td>Your container</td><td><code>kubectl exec … curl localhost</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h3>When you are done</h3>
+  <h2>Clean up</h2>
+<pre><span class="c"># remove the helper pods that "kubectl debug node/…" leaves behind</span>
+kubectl get pods -o name | grep node-debugger | xargs kubectl delete
+<span class="c"># delete the whole cluster; "kind create cluster" brings a fresh one back in about a minute</span>
+kind delete cluster</pre>
+</section>
+
+</div>

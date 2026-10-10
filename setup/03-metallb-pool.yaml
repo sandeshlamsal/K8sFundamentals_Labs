@@ -1,0 +1,44 @@
+# Tells MetalLB which addresses it may hand out and how to announce them.
+# Apply AFTER installing MetalLB, because these object types only exist once
+# MetalLB's own definitions (CRDs) are installed.
+# Used by:  kubectl apply -f setup/03-metallb-pool.yaml   (section 7)
+
+# apiVersion: a custom API group that MetalLB adds to the cluster.
+apiVersion: metallb.io/v1beta1
+
+# kind: an IPAddressPool is a range of addresses MetalLB may give to Services of
+# type LoadBalancer. With no pool, such Services stay at EXTERNAL-IP <pending>.
+kind: IPAddressPool
+
+metadata:
+  # name: any name; the L2Advertisement below could refer to it.
+  name: kind-pool
+
+  # namespace: MetalLB only reads its configuration from its own namespace.
+  # Put this anywhere else and it is silently ignored.
+  namespace: metallb-system
+
+spec:
+  # addresses: the range to hand out. Two rules decide the choice:
+  #   1. It must be INSIDE the kind Docker network (normally 172.18.0.0/16), because
+  #      layer-2 mode works by ARP and ARP only reaches machines on the same network.
+  #   2. It must not collide with addresses Docker gives to containers. Docker
+  #      assigns from the bottom (172.18.0.2, .3, ...), so we take the far top.
+  # Check your network with:
+  #   docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
+  addresses:
+  - 172.18.255.200-172.18.255.250
+---
+apiVersion: metallb.io/v1beta1
+
+# kind: an L2Advertisement switches on layer-2 mode: one node answers ARP requests
+# for each assigned address, so traffic for that address arrives at that node.
+# Without this object MetalLB assigns the IP but nobody answers for it.
+kind: L2Advertisement
+
+metadata:
+  name: kind-l2
+  # Same rule as above: must be in MetalLB's namespace.
+  namespace: metallb-system
+
+# No "spec" on purpose: an empty L2Advertisement announces every pool.

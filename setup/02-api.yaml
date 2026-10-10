@@ -1,0 +1,77 @@
+# The "api" application: three identical pods plus one Service in front of them.
+# Used by:  kubectl apply -f setup/02-api.yaml   (sections 4 to 8)
+
+# apiVersion: Deployments live in the "apps" API group, version v1.
+apiVersion: apps/v1
+
+# kind: a Deployment keeps a set number of identical pods running and replaces any
+# that die. Replacements get NEW IP addresses, which is exactly why clients need a
+# Service instead of talking to pod IPs.
+kind: Deployment
+
+metadata:
+  # name: the Deployment's name. Its pods are named api-<hash>-<random>.
+  name: api
+
+spec:
+  # replicas: how many pods to keep running. Three gives the Service something to
+  # choose between and usually puts pods on both workers.
+  replicas: 3
+
+  # selector: how the Deployment recognises its own pods. It must match the labels
+  # in "template" below, otherwise the API server rejects the Deployment.
+  selector:
+    matchLabels:
+      app: api
+
+  # template: the blueprint every pod is stamped from.
+  template:
+    metadata:
+      # labels: put on each pod. Two things look for app=api:
+      # the Deployment's selector above and the Service's selector below.
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: whoami
+
+        # image: a tiny web server that answers any request with its own hostname
+        # and the address the request came from (RemoteAddr). That makes it visible
+        # which pod answered and whether the client IP survived the trip.
+        image: traefik/whoami:v1.10
+
+        # args: options handed to the program. whoami listens on 80 by default;
+        # we move it to 8080 so the Service visibly translates port 80 -> 8080.
+        args: ["--port=8080"]
+
+        # containerPort: documentation of the listening port. Informational only.
+        ports:
+        - containerPort: 8080
+---
+# apiVersion: Services belong to the core group, written as v1.
+apiVersion: v1
+
+# kind: a Service is a stable virtual IP and DNS name in front of changing pods.
+kind: Service
+
+metadata:
+  # name: becomes the DNS name. Pods in the same namespace reach it as "api",
+  # in full: api.default.svc.cluster.local
+  name: api
+
+spec:
+  # type: not set, so it is ClusterIP: reachable only from inside the cluster.
+  # Section 6 patches it to NodePort and section 7 to LoadBalancer.
+
+  # selector: send traffic to every Ready pod labelled app=api. Kubernetes keeps the
+  # matching pod IPs in an EndpointSlice, and kube-proxy turns that into rules.
+  selector:
+    app: api
+
+  ports:
+    # port: the port clients dial on the Service IP (http://api:80).
+  - port: 80
+
+    # targetPort: the port on the pod the traffic is rewritten to. It must equal the
+    # port the container really listens on (the --port=8080 above).
+    targetPort: 8080

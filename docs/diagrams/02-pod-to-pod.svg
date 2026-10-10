@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 904 374" width="904" height="374" role="img" aria-label="Pod A reaches pod C through worker1's routing table, and pod B by being routed from worker1 to worker2 with source and destination pod IPs unchanged.">
+<style>
+  :root{--panel:#ffffff;--fg:#152033;--muted:#5b6b82;--line:#b9c4d4;--node:#e6ecf5;--pod:#dbe7ff;--pod-line:#6f93e0;--accent:#2a56c6;--pkt:#c2570c;--pkt-fill:#fdebd8}
+  @media (prefers-color-scheme: dark){:root{--panel:#161e29;--fg:#e3e9f2;--muted:#93a1b5;--line:#3a4759;--node:#1a2431;--pod:#1c2f57;--pod-line:#5c82d6;--accent:#86a9ff;--pkt:#f0a253;--pkt-fill:#3a2714}}
+  text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;fill:var(--fg)}
+  .b{font-weight:600} text.dim{fill:var(--muted)} text.p{fill:var(--pkt);font-weight:600} text.a{fill:var(--accent);font-weight:600}
+  .bg{fill:var(--panel)} .node{fill:var(--node);stroke:var(--line)} .pod{fill:var(--pod);stroke:var(--pod-line)}
+  .box{fill:var(--panel);stroke:var(--line)} .hot{fill:var(--pkt-fill);stroke:var(--pkt);stroke-width:1.5}
+  .ln{fill:none;stroke:var(--muted);stroke-width:1.5} .ln.a{stroke:var(--accent);stroke-width:2}
+  .ln.p{stroke:var(--pkt);stroke-width:2} .ln.dash{stroke-dasharray:5 4}
+  .mk{fill:var(--muted)} .mk.a{fill:var(--accent)} .mk.p{fill:var(--pkt)}
+</style>
+<defs>
+  <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk a" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk p" d="M0 0L10 5L0 10z"/></marker>
+</defs>
+<rect class="bg" x="-12" y="-12" width="904" height="374" rx="6"/>
+      <rect class="node" x="10" y="10" width="410" height="270" rx="6"/>
+      <rect class="node" x="460" y="10" width="410" height="270" rx="6"/>
+      <text class="b" x="26" y="34">worker1 · pod CIDR 10.244.1.0/24</text>
+      <text class="b" x="476" y="34">worker2 · pod CIDR 10.244.2.0/24</text>
+      <rect class="pod" x="40" y="56" width="150" height="60" rx="4"/>
+      <text class="b" x="115" y="80" text-anchor="middle">pod A</text><text x="115" y="100" text-anchor="middle">10.244.1.5</text>
+      <rect class="pod" x="240" y="56" width="150" height="60" rx="4"/>
+      <text class="b" x="315" y="80" text-anchor="middle">pod C</text><text x="315" y="100" text-anchor="middle">10.244.1.6</text>
+      <rect class="pod" x="590" y="56" width="150" height="60" rx="4"/>
+      <text class="b" x="665" y="80" text-anchor="middle">pod B</text><text x="665" y="100" text-anchor="middle">10.244.2.7</text>
+      <rect class="box" x="40" y="160" width="350" height="50" rx="4"/>
+      <text x="54" y="181">10.244.1.6 dev vethC</text>
+      <text x="54" y="199">10.244.2.0/24 via 172.18.0.4</text>
+      <rect class="box" x="490" y="160" width="350" height="50" rx="4"/>
+      <text x="504" y="190">10.244.2.7 dev vethB</text>
+      <rect class="box" x="135" y="232" width="160" height="32" rx="4"/>
+      <text x="215" y="253" text-anchor="middle">eth0 172.18.0.3</text>
+      <rect class="box" x="585" y="232" width="160" height="32" rx="4"/>
+      <text x="665" y="253" text-anchor="middle">eth0 172.18.0.4</text>
+      <!-- same node -->
+      <line class="ln a" x1="80" y1="116" x2="80" y2="158" marker-end="url(#ma)"/>
+      <line class="ln a" x1="340" y1="160" x2="340" y2="118" marker-end="url(#ma)"/>
+      <text class="a" x="215" y="142" text-anchor="middle">1 same node</text>
+      <!-- cross node -->
+      <line class="ln p" x1="150" y1="116" x2="150" y2="158" marker-end="url(#mp)"/>
+      <line class="ln p" x1="215" y1="210" x2="215" y2="230" marker-end="url(#mp)"/>
+      <polyline class="ln p" points="215,264 215,310 665,310 665,266" marker-end="url(#mp)"/>
+      <line class="ln p" x1="665" y1="232" x2="665" y2="212" marker-end="url(#mp)"/>
+      <line class="ln p" x1="665" y1="160" x2="665" y2="118" marker-end="url(#mp)"/>
+      <text class="dim" x="440" y="302" text-anchor="middle">node network 172.18.0.0/16</text>
+      <text class="p" x="440" y="332" text-anchor="middle">2 cross node: src 10.244.1.5 → dst 10.244.2.7, unchanged</text>
+    </svg>

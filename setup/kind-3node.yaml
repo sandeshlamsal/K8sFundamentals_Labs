@@ -1,0 +1,65 @@
+# kind cluster definition: 1 control-plane node + 2 worker nodes.
+# Used by:  kind create cluster --config setup/kind-3node.yaml
+
+# kind: tells the "kind" tool what this document describes. "Cluster" is the only
+# top-level type a kind config file can hold.
+kind: Cluster
+
+# apiVersion: the version of kind's config format. v1alpha4 is the current one;
+# kind refuses the file if this line is missing or wrong.
+apiVersion: kind.x-k8s.io/v1alpha4
+
+# networking: cluster-wide network settings. Anything not listed keeps kind's default.
+# Defaults we rely on but do not set (they explain the addresses in the diagrams):
+#   podSubnet: 10.244.0.0/16      -> every pod IP comes from here, one /24 slice per node
+#   serviceSubnet: 10.96.0.0/16   -> every Service (ClusterIP) comes from here
+#   disableDefaultCNI: false      -> kind installs its own CNI (kindnet), so nodes go Ready
+networking:
+  # kubeProxyMode: how kube-proxy turns a Service into something the node kernel enforces.
+  #   iptables -> one chain of DNAT rules per Service and per pod behind it
+  #   nftables -> the same idea in the newer nftables engine, inspected with "nft"
+  #   ipvs     -> the kernel's IPVS load balancer; being phased out upstream
+  #   none     -> no kube-proxy at all (for a CNI such as Cilium that replaces it)
+  # Why iptables here, written out even though it is kind's default:
+  #   1. Section 4 reads the Service rules with "iptables-save". In any other mode
+  #      that command shows nothing for Services and the lab step fails.
+  #   2. Its chains read like the diagram: KUBE-SERVICES (match the Service IP)
+  #      -> KUBE-SVC-... (pick one pod) -> KUBE-SEP-... (rewrite the destination).
+  #   3. Stating it keeps the lab working if a later kind release changes the default.
+  kubeProxyMode: iptables
+
+# nodes: one list entry per node. Each entry becomes one Docker container, named
+# <cluster>-<role>: kind-control-plane, kind-worker, kind-worker2.
+nodes:
+
+# role: control-plane -> this node runs the cluster's brain: API server, etcd,
+# scheduler, controller-manager. A cluster needs at least one. It carries a
+# NoSchedule taint, so the lab pods land on the workers, not here.
+- role: control-plane
+
+  # extraPortMappings: publish a port of this node container on the Mac, exactly like
+  # "docker run -p". Needed because Docker Desktop runs inside a VM: the Mac cannot
+  # reach the nodes' 172.18.x.x addresses, only ports published this way.
+  # It can only be set when the cluster is created, which is why it is here already.
+  extraPortMappings:
+
+    # containerPort: the port inside the node container to expose. 30081 is the
+    # NodePort we give the ingress controller in section 8. A NodePort is open on
+    # every node, so publishing it from this one node is enough.
+  - containerPort: 30081
+
+    # hostPort: the port on the Mac. http://localhost:8080 therefore reaches
+    # NodePort 30081. 8080 avoids the privileged, often-taken port 80.
+    hostPort: 8080
+
+    # protocol: TCP, because HTTP runs over TCP. TCP is the default; it is written
+    # out so nobody has to guess.
+    protocol: TCP
+
+# role: worker -> runs only kubelet, kube-proxy, the CNI and your pods.
+# Two workers are the minimum that lets us compare "same node" with "across nodes".
+# The first becomes kind-worker (worker1 in the diagrams).
+- role: worker
+
+# The second becomes kind-worker2 (worker2 in the diagrams).
+- role: worker

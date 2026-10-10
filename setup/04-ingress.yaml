@@ -1,0 +1,74 @@
+# A Service for the web pod, plus the Ingress rules that route by host and path.
+# Apply AFTER installing Traefik.
+# Used by:  kubectl apply -f setup/04-ingress.yaml   (section 8)
+
+# An Ingress can only point at Services, never at pods directly, so the web pod
+# from 01-pods.yaml needs a Service first.
+apiVersion: v1
+kind: Service
+
+metadata:
+  # name: the Ingress below refers to this Service by this name.
+  name: web
+
+spec:
+  # selector: matches the label app=web on the pod "web".
+  selector:
+    app: web
+
+  ports:
+    # port: the Service port the Ingress will name.
+  - port: 80
+    # targetPort: nginx inside the pod listens on 80.
+    targetPort: 80
+---
+# apiVersion: Ingress lives in the networking.k8s.io group, version v1.
+apiVersion: networking.k8s.io/v1
+
+# kind: an Ingress is only a table of routing rules. It moves no traffic itself;
+# a controller pod (Traefik here) reads it and configures its proxy to match.
+kind: Ingress
+
+metadata:
+  name: shop
+
+spec:
+  # ingressClassName: which controller should act on these rules. The Traefik Helm
+  # chart creates a class called "traefik". Leave this out, or name a class nobody
+  # serves, and the rules are ignored without any error.
+  ingressClassName: traefik
+
+  rules:
+    # host: these rules apply only when the request's Host header is shop.local.
+    # Any other Host gets a 404 from the controller. This is what lets many sites
+    # share one IP address.
+  - host: shop.local
+
+    # http: rules for HTTP traffic (the only kind an Ingress understands).
+    http:
+      paths:
+
+        # path: match on the URL path.
+      - path: /api
+
+        # pathType: Prefix matches /api and everything under it (/api/users).
+        # The alternatives are Exact (only /api) and ImplementationSpecific.
+        pathType: Prefix
+
+        # backend: where matching requests go. "number" is the Service's port (80),
+        # not the pod's targetPort (8080); the Service does that translation.
+        backend:
+          service:
+            name: api
+            port:
+              number: 80
+
+        # The catch-all. The longest matching prefix wins regardless of the order
+        # written here, so /api/... goes to "api" and everything else to "web".
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 80

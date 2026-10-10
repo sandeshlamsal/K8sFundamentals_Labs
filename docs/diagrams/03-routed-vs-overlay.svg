@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -12 904 224" width="904" height="224" role="img" aria-label="A routed packet carries pod IPs directly; an overlay packet adds an outer node-to-node IP header and a VXLAN header around the same pod packet.">
+<style>
+  :root{--panel:#ffffff;--fg:#152033;--muted:#5b6b82;--line:#b9c4d4;--node:#e6ecf5;--pod:#dbe7ff;--pod-line:#6f93e0;--accent:#2a56c6;--pkt:#c2570c;--pkt-fill:#fdebd8}
+  @media (prefers-color-scheme: dark){:root{--panel:#161e29;--fg:#e3e9f2;--muted:#93a1b5;--line:#3a4759;--node:#1a2431;--pod:#1c2f57;--pod-line:#5c82d6;--accent:#86a9ff;--pkt:#f0a253;--pkt-fill:#3a2714}}
+  text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;fill:var(--fg)}
+  .b{font-weight:600} text.dim{fill:var(--muted)} text.p{fill:var(--pkt);font-weight:600} text.a{fill:var(--accent);font-weight:600}
+  .bg{fill:var(--panel)} .node{fill:var(--node);stroke:var(--line)} .pod{fill:var(--pod);stroke:var(--pod-line)}
+  .box{fill:var(--panel);stroke:var(--line)} .hot{fill:var(--pkt-fill);stroke:var(--pkt);stroke-width:1.5}
+  .ln{fill:none;stroke:var(--muted);stroke-width:1.5} .ln.a{stroke:var(--accent);stroke-width:2}
+  .ln.p{stroke:var(--pkt);stroke-width:2} .ln.dash{stroke-dasharray:5 4}
+  .mk{fill:var(--muted)} .mk.a{fill:var(--accent)} .mk.p{fill:var(--pkt)}
+</style>
+<defs>
+  <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk a" d="M0 0L10 5L0 10z"/></marker>
+  <marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="mk p" d="M0 0L10 5L0 10z"/></marker>
+</defs>
+<rect class="bg" x="-12" y="-12" width="904" height="224" rx="6"/>
+      <text class="b" x="10" y="26">Routed (kindnet): the pod packet travels as it is</text>
+      <rect class="pod" x="10" y="38" width="300" height="44"/>
+      <text x="160" y="65" text-anchor="middle">IP 10.244.1.5 → 10.244.2.7</text>
+      <rect class="box" x="310" y="38" width="130" height="44"/>
+      <text x="375" y="65" text-anchor="middle">TCP :8080</text>
+      <rect class="box" x="440" y="38" width="160" height="44"/>
+      <text x="520" y="65" text-anchor="middle">HTTP payload</text>
+      <text class="b" x="10" y="124">Overlay (VXLAN): the same packet rides inside a node-to-node packet</text>
+      <rect class="hot" x="10" y="136" width="270" height="44"/>
+      <text x="145" y="163" text-anchor="middle">IP 172.18.0.3 → 172.18.0.4</text>
+      <rect class="hot" x="280" y="136" width="170" height="44"/>
+      <text x="365" y="163" text-anchor="middle">UDP 4789 · VXLAN</text>
+      <rect class="pod" x="450" y="136" width="230" height="44"/>
+      <text x="565" y="163" text-anchor="middle">IP 10.244.1.5 → 10.244.2.7</text>
+      <rect class="box" x="680" y="136" width="90" height="44"/>
+      <text x="725" y="163" text-anchor="middle">TCP :8080</text>
+      <rect class="box" x="770" y="136" width="100" height="44"/>
+      <text x="820" y="163" text-anchor="middle">payload</text>
+    </svg>
