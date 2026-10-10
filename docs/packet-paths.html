@@ -102,19 +102,17 @@ svg .mk{fill:var(--muted)} svg .mk.a{fill:var(--accent)} svg .mk.p{fill:var(--pk
   <p>Do this once. Each later section then adds one small piece under its own "Set up" heading, in order. The files live in the repo's <code>setup/</code> folder; their contents are shown here too, with a comment above every line saying what it does and why it is set that way.</p>
 
   <p class="lbl">Step 1 · Install the tools (once per machine)</p>
-  <p>You need five things: Git, Docker, kind, kubectl and Helm. Skip any you already have.</p>
-<pre><span class="c"># macOS (Homebrew)</span>
-brew install --cask docker
-brew install git kind kubectl helm
-
-<span class="c"># Linux (Homebrew on Linux, after installing Docker Engine)</span>
-curl -fsSL https://get.docker.com | sh
+  <p>You need five things: Git, Docker, kind, kubectl and Helm. Run <b>only the block for your operating system</b> and skip anything you already have.</p>
+  <p><b>macOS</b> (uses Homebrew). There is no <code>usermod</code> step on a Mac; Docker Desktop needs no group setup.</p>
+<pre>brew install --cask docker
+brew install git kind kubectl helm</pre>
+  <p><b>Linux only.</b> The <code>usermod</code> line lets you run <code>docker</code> without <code>sudo</code>; it does not exist on macOS.</p>
+<pre>curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER      <span class="c"># then log out and back in</span>
-brew install git kind kubectl helm
-
-<span class="c"># Windows: install WSL2 and Docker Desktop, then run everything inside the WSL (Ubuntu) terminal</span>
-winget install Docker.DockerDesktop
-<span class="c"># inside WSL, follow the Linux line above for git, kind, kubectl and helm</span></pre>
+brew install git kind kubectl helm <span class="c"># Homebrew on Linux, or use your package manager</span></pre>
+  <p><b>Windows.</b> Install WSL2 and Docker Desktop, then do everything else inside the WSL (Ubuntu) terminal.</p>
+<pre>winget install Docker.DockerDesktop
+<span class="c"># then, inside WSL, install git, kind, kubectl and helm (last line of the Linux block)</span></pre>
   <p>The commands on this page are written for a bash or zsh shell. On Windows, use the WSL terminal, not PowerShell.</p>
 
   <p class="lbl">Step 2 · Clone the repo and go into it</p>

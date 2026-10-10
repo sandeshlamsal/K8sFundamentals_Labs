@@ -55,21 +55,28 @@ Do this once per machine. It starts from nothing: install the tools, clone this 
 
 ### Step 1: install the tools (once per machine)
 
-You need five things: Git, Docker, kind, kubectl and Helm. Skip any you already have.
+You need five things: Git, Docker, kind, kubectl and Helm. Run **only the block for your operating system** and skip anything you already have.
+
+**macOS** (uses Homebrew). There is no `usermod` step on a Mac; Docker Desktop needs no group setup.
 
 ```sh
-# macOS (Homebrew)
 brew install --cask docker
 brew install git kind kubectl helm
+```
 
-# Linux (Homebrew on Linux, after installing Docker Engine)
+**Linux only.** The `usermod` line lets you run `docker` without `sudo`; it does not exist on macOS.
+
+```sh
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER      # then log out and back in
-brew install git kind kubectl helm
+brew install git kind kubectl helm # Homebrew on Linux, or use your package manager
+```
 
-# Windows: install WSL2 and Docker Desktop, then run everything inside the WSL (Ubuntu) terminal
+**Windows.** Install WSL2 and Docker Desktop, then do everything else inside the WSL (Ubuntu) terminal.
+
+```sh
 winget install Docker.DockerDesktop
-# inside WSL, follow the Linux line above for git, kind, kubectl and helm
+# then, inside WSL, install git, kind, kubectl and helm (last line of the Linux block)
 ```
 
 The commands on this page are written for a bash or zsh shell. On Windows, use the WSL terminal, not PowerShell.
