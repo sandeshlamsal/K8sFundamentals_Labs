@@ -24,6 +24,8 @@ spec:
   #      layer-2 mode works by ARP and ARP only reaches machines on the same network.
   #   2. It must not collide with addresses Docker gives to containers. Docker
   #      assigns from the bottom (172.18.0.2, .3, ...), so we take the far top.
+  # The range differs per machine (172.18, 172.19, 172.20 ...). The command in
+  # section 7 swaps 172.18 for your machine's prefix before applying this file.
   # Check your network with:
   #   docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
   addresses:

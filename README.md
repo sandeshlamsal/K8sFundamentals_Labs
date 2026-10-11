@@ -185,7 +185,7 @@ pwd                            # must end in /K8sFundamentals_Labs
 kind create cluster --config setup/kind-3node.yaml
 kubectl get nodes -o wide      # three nodes, all Ready, with their 172.18.x.x addresses
 # which pod address range each node owns
-kubectl get nodes -o custom-columns=NODE:.metadata.name,IP:.status.addresses[0].address,PODCIDR:.spec.podCIDR
+kubectl get nodes -o 'custom-columns=NODE:.metadata.name,IP:.status.addresses[0].address,PODCIDR:.spec.podCIDR'
 docker ps --format '{{.Names}}'   # the same three nodes, seen as containers
 ```
 
@@ -547,16 +547,16 @@ The Mac cannot reach node IPs directly, because Docker runs in a VM. A throwaway
 
 ```sh
 # default policy: RemoteAddr is a node-side address, not the client's
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $W1:30080 | grep -E 'Hostname|RemoteAddr'
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s ${W1}:30080 | grep -E 'Hostname|RemoteAddr'
 
 # Local policy: RemoteAddr becomes the client container's own 172.18.x.x address
 kubectl patch svc api -p '{"spec":{"externalTrafficPolicy":"Local"}}'
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $W1:30080 | grep -E 'Hostname|RemoteAddr'
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s ${W1}:30080 | grep -E 'Hostname|RemoteAddr'
 
 # Local policy with one pod: the node without the pod stops answering
 kubectl scale deploy api --replicas=1 && kubectl get pods -l app=api -o wide
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 $W1:30080 | grep Hostname
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 $W2:30080 | grep Hostname
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 ${W1}:30080 | grep Hostname
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 ${W2}:30080 | grep Hostname
 
 # put it back
 kubectl scale deploy api --replicas=3
@@ -603,6 +603,8 @@ spec:
   #      layer-2 mode works by ARP and ARP only reaches machines on the same network.
   #   2. It must not collide with addresses Docker gives to containers. Docker
   #      assigns from the bottom (172.18.0.2, .3, ...), so we take the far top.
+  # The range differs per machine (172.18, 172.19, 172.20 ...). The command in
+  # section 7 swaps 172.18 for your machine's prefix before applying this file.
   # Check your network with:
   #   docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
   addresses:
@@ -634,17 +636,25 @@ kubectl get svc api            # EXTERNAL-IP <pending>
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
 kubectl wait -n metallb-system --for=condition=Ready pod -l app=metallb --timeout=180s
 
-# the pool must sit inside the kind network; edit the file if this is not 172.18.0.0/16
+# the pool must sit inside the kind Docker network, whose range differs per machine
 docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
-kubectl apply -f setup/03-metallb-pool.yaml
+# take the first two numbers of the IPv4 range (for example 172.18 or 172.20) ...
+PREFIX=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' | tr ' ' '\n' | grep -E '^[0-9]+\.' | cut -d. -f1-2)
+echo $PREFIX
+# ... and apply the pool file with 172.18 swapped for your prefix
+sed "s/172\.18\./${PREFIX}./g" setup/03-metallb-pool.yaml | kubectl apply -f -
+kubectl get ipaddresspool -n metallb-system
 ```
 
 **Watch it**
 
 ```sh
-kubectl get svc api                           # EXTERNAL-IP 172.18.255.200
-docker run --rm --network kind nicolaka/netshoot:v0.13 arping -c 2 172.18.255.200
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s 172.18.255.200
+kubectl get svc api                           # EXTERNAL-IP is now filled in, ending in .255.200
+LB=$(kubectl get svc api -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo $LB
+# which node answers for that address (the MAC in the reply belongs to one node)
+docker run --rm --network kind nicolaka/netshoot:v0.13 arping -c 2 $LB
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $LB | grep -E 'Hostname|RemoteAddr'
 ```
 
 ## 8. Ingress: routing by hostname and path

@@ -204,7 +204,7 @@ nodes:
 kind create cluster --config setup/kind-3node.yaml
 kubectl get nodes -o wide      <span class="c"># three nodes, all Ready, with their 172.18.x.x addresses</span>
 <span class="c"># which pod address range each node owns</span>
-kubectl get nodes -o custom-columns=NODE:.metadata.name,IP:.status.addresses[0].address,PODCIDR:.spec.podCIDR
+kubectl get nodes -o 'custom-columns=NODE:.metadata.name,IP:.status.addresses[0].address,PODCIDR:.spec.podCIDR'
 docker ps --format '{{.Names}}'   <span class="c"># the same three nodes, seen as containers</span></pre>
   <div class="tscroll">
   <table>
@@ -694,16 +694,16 @@ echo $W1 $W2</pre>
   <p class="lbl">Watch it</p>
   <p>Your Mac cannot reach node IPs directly, because Docker runs in a VM. A throwaway container on the same Docker network plays the outside client.</p>
 <pre><span class="c"># default policy: RemoteAddr is a node-side address, not the client's</span>
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $W1:30080 | grep -E 'Hostname|RemoteAddr'
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s ${W1}:30080 | grep -E 'Hostname|RemoteAddr'
 
 <span class="c"># Local policy: RemoteAddr becomes the client container's own 172.18.x.x address</span>
 kubectl patch svc api -p '{"spec":{"externalTrafficPolicy":"Local"}}'
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $W1:30080 | grep -E 'Hostname|RemoteAddr'
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s ${W1}:30080 | grep -E 'Hostname|RemoteAddr'
 
 <span class="c"># Local policy with one pod: the node without the pod stops answering</span>
 kubectl scale deploy api --replicas=1 && kubectl get pods -l app=api -o wide
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 $W1:30080 | grep Hostname
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 $W2:30080 | grep Hostname
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 ${W1}:30080 | grep Hostname
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s -m 3 ${W2}:30080 | grep Hostname
 
 <span class="c"># put it back</span>
 kubectl scale deploy api --replicas=3
@@ -748,9 +748,14 @@ kubectl get svc api            <span class="c"># EXTERNAL-IP &lt;pending&gt;</sp
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
 kubectl wait -n metallb-system --for=condition=Ready pod -l app=metallb --timeout=180s
 
-<span class="c"># the pool must sit inside the kind network; edit the file if this is not 172.18.0.0/16</span>
+<span class="c"># the pool must sit inside the kind Docker network, whose range differs per machine</span>
 docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'
-kubectl apply -f setup/03-metallb-pool.yaml</pre>
+<span class="c"># take the first two numbers of the IPv4 range (for example 172.18 or 172.20) ...</span>
+PREFIX=$(docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}' | tr ' ' '\n' | grep -E '^[0-9]+\.' | cut -d. -f1-2)
+echo $PREFIX
+<span class="c"># ... and apply the pool file with 172.18 swapped for your prefix</span>
+sed "s/172\.18\./${PREFIX}./g" setup/03-metallb-pool.yaml | kubectl apply -f -
+kubectl get ipaddresspool -n metallb-system</pre>
   <details open>
     <summary>setup/03-metallb-pool.yaml</summary>
 <pre><span class="c"># Tells MetalLB which addresses it may hand out and how to announce them.</span>
@@ -779,6 +784,8 @@ spec:
 <span class="c">  #      layer-2 mode works by ARP and ARP only reaches machines on the same network.</span>
 <span class="c">  #   2. It must not collide with addresses Docker gives to containers. Docker</span>
 <span class="c">  #      assigns from the bottom (172.18.0.2, .3, ...), so we take the far top.</span>
+<span class="c">  # The range differs per machine (172.18, 172.19, 172.20 ...). The command in</span>
+<span class="c">  # section 7 swaps 172.18 for your machine's prefix before applying this file.</span>
 <span class="c">  # Check your network with:</span>
 <span class="c">  #   docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}} {{end}}'</span>
   addresses:
@@ -799,9 +806,12 @@ metadata:
 <span class="c"># No "spec" on purpose: an empty L2Advertisement announces every pool.</span></pre>
   </details>
   <p class="lbl">Watch it</p>
-<pre>kubectl get svc api                           <span class="c"># EXTERNAL-IP 172.18.255.200</span>
-docker run --rm --network kind nicolaka/netshoot:v0.13 arping -c 2 172.18.255.200
-docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s 172.18.255.200</pre>
+<pre>kubectl get svc api                           <span class="c"># EXTERNAL-IP is now filled in, ending in .255.200</span>
+LB=$(kubectl get svc api -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo $LB
+<span class="c"># which node answers for that address (the MAC in the reply belongs to one node)</span>
+docker run --rm --network kind nicolaka/netshoot:v0.13 arping -c 2 $LB
+docker run --rm --network kind nicolaka/netshoot:v0.13 curl -s $LB | grep -E 'Hostname|RemoteAddr'</pre>
 </section>
 
 <!-- 8 -->
